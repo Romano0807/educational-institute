@@ -10,11 +10,11 @@ import time
 def load_and_process_data():
     df = pd.read_excel("포항시 학원.xlsx", header=4)
     df = df.rename(columns={
-        'Unnamed: 1': '학원명',
-        'Unnamed: 3': '주소',
+        '학원명': '학원명',
+        '주소': '주소',
         '기숙사비': '총교습비'
     })
-    df = df.dropna(subset=['학원명', '주소'])
+    df = df.dropna(subset=['학원명', '주소', '총교습비'])
     df['총교습비'] = (
         df['총교습비']
         .astype(str)
@@ -48,23 +48,26 @@ def geocode_addresses(df):
 
 # 메인 앱
 def main():
-    st.title("📍 포항시 학원 평균 교습비 지도 시각화")
+    st.title("📍 포항시 학원 평균 교습비 시각화")
 
     df = load_and_process_data()
     df_geo = geocode_addresses(df)
 
-    st.subheader("학원별 평균 교습비")
+    st.subheader("💰 평균 교습비 Top 20 학원")
+    top20 = df.sort_values("총교습비", ascending=False).head(20)
     fig = px.bar(
-        df.sort_values("총교습비", ascending=False).head(20),
+        top20,
         x="학원명", y="총교습비",
-        title="Top 20 평균 교습비 학원"
+        title="Top 20 평균 교습비 학원",
+        labels={"학원명": "학원", "총교습비": "총 교습비"},
+        height=600
     )
     st.plotly_chart(fig)
 
-    st.subheader("지도 시각화")
+    st.subheader("🗺️ 포항시 전체 학원 지도")
     st.map(df_geo.rename(columns={"위도": "lat", "경도": "lon"}))
 
-    st.subheader("학원 데이터")
+    st.subheader("📄 학원 데이터 테이블")
     st.dataframe(df_geo[["학원명", "주소", "총교습비", "위도", "경도"]])
 
 if __name__ == "__main__":
