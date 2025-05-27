@@ -7,12 +7,21 @@ from geopy.extra.rate_limiter import RateLimiter
 
 @st.cache_data
 def load_and_geocode_data():
-    df = pd.read_csv("academy_geocoded.csv")  # 주소만 있는 경우를 포함
-    df = df.rename(columns=lambda x: x.strip())
+    df = pd.read_csv("academy_geocoded.csv")
 
-    if "위도" not in df.columns or "경도" not in df.columns or df["위도"].isnull().all():
+    # 열 이름 정리
+    df = df.rename(columns=lambda x: x.strip())
+    df.columns = [col.replace(" ", "") for col in df.columns]
+
+    # 위도/경도 이름 정리
+    if "위도" in df.columns and "경도" in df.columns:
+        df = df.rename(columns={"위도": "lat", "경도": "lon"})
+
+    # 위도/경도 없는 경우 지오코딩 수행
+    if "lat" not in df.columns or "lon" not in df.columns or df["lat"].isnull().all():
         geolocator = Nominatim(user_agent="academy_mapper")
         geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
+
         latitudes, longitudes = [], []
         for addr in df["주소"]:
             try:
@@ -26,17 +35,18 @@ def load_and_geocode_data():
             except:
                 latitudes.append(None)
                 longitudes.append(None)
-        df["위도"] = latitudes
-        df["경도"] = longitudes
-        df = df.dropna(subset=["위도", "경도"])
+
+        df["lat"] = latitudes
+        df["lon"] = longitudes
+
+    # 유효한 위치만 반환
+    df = df.dropna(subset=["lat", "lon"])
     return df
 
 def main():
     st.title("📍 포항시 학원 평균 교습비 시각화")
 
     df = load_and_geocode_data()
-    df = df.dropna(subset=["위도", "경도"])
-    df = df.rename(columns={"위도": "lat", "경도": "lon"})
 
     st.subheader("💰 평균 교습비 Top 20 학원")
     top20 = df.sort_values("총교습비", ascending=False).head(20)
@@ -51,7 +61,8 @@ def main():
     fig.update_layout(yaxis_tickformat=",", yaxis_title="총 교습비 (원)")
     st.plotly_chart(fig)
 
-    st.subheader("🗺️ 전체 학원 위치")
+    st.subheader("🗺️ 전체 학원 위치 표시")
+    st.write(f"✅ 지도에 표시된 학원 수: {len(df)}곳")
     st.pydeck_chart(pdk.Deck(
         map_style="mapbox://styles/mapbox/light-v9",
         initial_view_state=pdk.ViewState(
