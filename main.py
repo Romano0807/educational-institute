@@ -8,16 +8,13 @@ from geopy.extra.rate_limiter import RateLimiter
 @st.cache_data
 def load_and_geocode_data():
     df = pd.read_csv("academy_geocoded.csv")
+    df.columns = [col.strip() for col in df.columns]
 
-    # 열 이름 정리
-    df = df.rename(columns=lambda x: x.strip())
-    df.columns = [col.replace(" ", "") for col in df.columns]
-
-    # 위도/경도 이름 정리
+    # 위도, 경도 컬럼 정리
     if "위도" in df.columns and "경도" in df.columns:
         df = df.rename(columns={"위도": "lat", "경도": "lon"})
 
-    # 위도/경도 없는 경우 지오코딩 수행
+    # 위도/경도 없을 경우 주소 기반으로 계산
     if "lat" not in df.columns or "lon" not in df.columns or df["lat"].isnull().all():
         geolocator = Nominatim(user_agent="academy_mapper")
         geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
@@ -39,7 +36,6 @@ def load_and_geocode_data():
         df["lat"] = latitudes
         df["lon"] = longitudes
 
-    # 유효한 위치만 반환
     df = df.dropna(subset=["lat", "lon"])
     return df
 
@@ -50,6 +46,7 @@ def main():
 
     st.subheader("💰 평균 교습비 Top 20 학원")
     top20 = df.sort_values("총교습비", ascending=False).head(20)
+
     fig = px.bar(
         top20,
         x="학원명", y="총교습비",
@@ -57,11 +54,18 @@ def main():
         labels={"학원명": "학원", "총교습비": "총 교습비"},
         height=600
     )
-    fig.update_traces(text=top20["총교습비"].apply(lambda x: f"{x:,}원"), textposition='outside')
-    fig.update_layout(yaxis_tickformat=",", yaxis_title="총 교습비 (원)")
+    fig.update_traces(
+        text=top20["총교습비"].apply(lambda x: f"₩{x:,.0f}"),
+        textposition='outside'
+    )
+    fig.update_layout(
+        yaxis_tickformat="₩,.0f",
+        yaxis_title="총 교습비 (원)",
+        xaxis_tickangle=-45
+    )
     st.plotly_chart(fig)
 
-    st.subheader("🗺️ 전체 학원 위치 표시")
+    st.subheader("🗺️ 전체 학원 위치 지도")
     st.write(f"✅ 지도에 표시된 학원 수: {len(df)}곳")
     st.pydeck_chart(pdk.Deck(
         map_style="mapbox://styles/mapbox/light-v9",
@@ -81,12 +85,12 @@ def main():
                 pickable=True,
             )
         ],
-        tooltip={"text": "학원명: {학원명}\n총교습비: {총교습비}원"}
+        tooltip={"text": "학원명: {학원명}\n총교습비: ₩{총교습비}"}
     ))
 
-    st.subheader("📄 전체 학원 데이터")
+    st.subheader("📄 전체 학원 데이터 테이블")
     df_display = df[["학원명", "주소", "총교습비", "lat", "lon"]].copy()
-    df_display["총교습비"] = df_display["총교습비"].apply(lambda x: f"{x:,}원")
+    df_display["총교습비"] = df_display["총교습비"].apply(lambda x: f"₩{x:,.0f}")
     st.dataframe(df_display)
 
 if __name__ == "__main__":
